@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../models/documents/attribute.dart';
 import '../../models/documents/document.dart';
 import '../../utils/delta.dart';
 import '../editor.dart';
@@ -153,8 +154,39 @@ mixin RawEditorStateTextInputClientMixin on EditorState
     if (diff.deleted.isEmpty && diff.inserted.isEmpty) {
       widget.controller.updateSelection(value.selection, ChangeSource.LOCAL);
     } else {
-      widget.controller.replaceText(
-          diff.start, diff.deleted.length, diff.inserted, value.selection);
+      var inserted = diff.inserted;
+      // Strip SourceURL metadata that Windows/Chromium adds when copying
+      // from browsers.
+      if (inserted.startsWith('SourceURL:')) {
+        final newlineIndex = inserted.indexOf('\n');
+        inserted =
+            newlineIndex != -1 ? inserted.substring(newlineIndex + 1) : '';
+      }
+      if (inserted.isNotEmpty) {
+        widget.controller.replaceText(
+            diff.start, diff.deleted.length, inserted, value.selection);
+
+        // Strip inline formatting for external pastes (heuristic: length > 3
+        // avoids stripping formatting from autocomplete/IME).
+        if (inserted.length > 3 && inserted != pastePlainText) {
+          for (final attr in [
+            Attribute.bold,
+            Attribute.italic,
+            Attribute.underline,
+            Attribute.strikeThrough,
+            Attribute.inlineCode,
+            Attribute.background,
+            Attribute.color,
+            Attribute.link,
+          ]) {
+            widget.controller.formatText(
+                diff.start, inserted.length, Attribute.clone(attr, null));
+          }
+        }
+      } else if (diff.deleted.isNotEmpty) {
+        widget.controller.replaceText(
+            diff.start, diff.deleted.length, '', value.selection);
+      }
     }
   }
 

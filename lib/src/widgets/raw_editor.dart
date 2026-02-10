@@ -1029,8 +1029,38 @@ class RawEditorState extends EditorState
     // See https://github.com/flutter/flutter/issues/11427
     final text = await Clipboard.getData(Clipboard.kTextPlain);
     if (text != null) {
+      var cleanText = text.text!;
+      // Strip SourceURL metadata that Windows/Chromium adds when copying
+      // from browsers.
+      if (cleanText.startsWith('SourceURL:')) {
+        final newlineIndex = cleanText.indexOf('\n');
+        cleanText =
+            newlineIndex != -1 ? cleanText.substring(newlineIndex + 1) : '';
+      }
+      if (cleanText.isEmpty) return;
+
       _replaceText(
-          ReplaceTextIntent(textEditingValue, text.text!, selection, cause));
+          ReplaceTextIntent(textEditingValue, cleanText, selection, cause));
+
+      // Strip inline formatting for external pastes to prevent inheriting
+      // styles from the cursor position or source rich text.
+      if (cleanText != pastePlainText || pastePlainText.isEmpty) {
+        final pasteLength = cleanText.length;
+        final pasteOffset = selection.baseOffset;
+        for (final attr in [
+          Attribute.bold,
+          Attribute.italic,
+          Attribute.underline,
+          Attribute.strikeThrough,
+          Attribute.inlineCode,
+          Attribute.background,
+          Attribute.color,
+          Attribute.link,
+        ]) {
+          controller.formatText(
+              pasteOffset, pasteLength, Attribute.clone(attr, null));
+        }
+      }
 
       bringIntoView(textEditingValue.selection.extent);
 

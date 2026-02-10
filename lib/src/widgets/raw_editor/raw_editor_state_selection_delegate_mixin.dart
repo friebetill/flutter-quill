@@ -51,19 +51,28 @@ mixin RawEditorStateSelectionDelegateMixin on EditorState
   }
 
   String _adjustInsertedText(String text) {
+    // Strip SourceURL metadata that Windows/Chromium adds when copying
+    // from browsers.
+    var cleaned = text;
+    if (cleaned.startsWith('SourceURL:')) {
+      final newlineIndex = cleaned.indexOf('\n');
+      cleaned =
+          newlineIndex != -1 ? cleaned.substring(newlineIndex + 1) : '';
+    }
+
     // For clip from editor, it may contain image, a.k.a 65532 or '\uFFFC'.
     // For clip from browser, image is directly ignore.
     // Here we skip image when pasting.
-    if (!text.codeUnits.contains(Embed.kObjectReplacementInt)) {
-      return text;
+    if (!cleaned.codeUnits.contains(Embed.kObjectReplacementInt)) {
+      return cleaned;
     }
 
     final sb = StringBuffer();
-    for (var i = 0; i < text.length; i++) {
-      if (text.codeUnitAt(i) == Embed.kObjectReplacementInt) {
+    for (var i = 0; i < cleaned.length; i++) {
+      if (cleaned.codeUnitAt(i) == Embed.kObjectReplacementInt) {
         continue;
       }
-      sb.write(text[i]);
+      sb.write(cleaned[i]);
     }
     return sb.toString();
   }
